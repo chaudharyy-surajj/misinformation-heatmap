@@ -27,6 +27,7 @@ from collections import defaultdict
 
 try:
     from fastapi import FastAPI, HTTPException, BackgroundTasks
+    from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import HTMLResponse, JSONResponse
     import uvicorn
@@ -44,7 +45,21 @@ try:
     from nltk.sentiment import SentimentIntensityAnalyzer
 except ImportError as e:
     print(f"Installing required packages: {e}")
-    os.system("pip install scikit-learn pandas textblob nltk feedparser requests numpy")
+    # Use the current interpreter's pip to ensure we install into the active environment (e.g., venv).
+    import subprocess
+    subprocess.check_call([
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "scikit-learn",
+        "pandas",
+        "textblob",
+        "nltk",
+        "feedparser",
+        "requests",
+        "numpy",
+    ])
     print("Please restart the application")
     sys.exit(1)
 
@@ -884,50 +899,57 @@ async def startup_event():
 
 @app.get("/")
 async def root():
-    return HTMLResponse(f"""
-    <html>
-    <head><title>Enhanced Real-Time Misinformation Detection</title></head>
-    <body style="font-family: Arial; padding: 20px; background: #f0f2f5;">
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-            <h1>🚀 Enhanced Real-Time Misinformation Detection System</h1>
-            <p><strong>🔴 LIVE:</strong> {len(MASSIVE_RSS_SOURCES)} RSS sources + Advanced ML + Real-time processing</p>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px;">
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <h3>🗺️ Interactive Heatmap</h3>
-                <p>Real-time misinformation hotspots across all Indian states</p>
-                <a href="/heatmap" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Open Heatmap</a>
+    """Serve the proper home page"""
+    try:
+        with open('../frontend/index.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        return HTMLResponse(html_content)
+    except FileNotFoundError:
+        # Fallback to basic page if index.html is not found
+        return HTMLResponse(f"""
+        <html>
+        <head><title>Enhanced Real-Time Misinformation Detection</title></head>
+        <body style="font-family: Arial; padding: 20px; background: #f0f2f5;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h1>🚀 Enhanced Real-Time Misinformation Detection System</h1>
+                <p><strong>🔴 LIVE:</strong> {len(MASSIVE_RSS_SOURCES)} RSS sources + Advanced ML + Real-time processing</p>
             </div>
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <h3>📊 System Status</h3>
-                <p>Live events: <strong>{len(live_events)}</strong></p>
-                <p>Active states: <strong>{len([s for s in state_events if state_events[s]])}</strong></p>
-                <p>Processing: <strong>{'ACTIVE' if processing_active else 'STOPPED'}</strong></p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <h3>🗺️ Interactive Heatmap</h3>
+                    <p>Real-time misinformation hotspots across all Indian states</p>
+                    <a href="/heatmap" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Open Heatmap</a>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <h3>📊 System Status</h3>
+                    <p>Live events: <strong>{len(live_events)}</strong></p>
+                    <p>Active states: <strong>{len([s for s in state_events if state_events[s]])}</strong></p>
+                    <p>Processing: <strong>{'ACTIVE' if processing_active else 'STOPPED'}</strong></p>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <h3>🧠 ML Features</h3>
+                    <p>✅ Advanced misinformation classifier</p>
+                    <p>✅ Sentiment analysis with VADER</p>
+                    <p>✅ Linguistic pattern detection</p>
+                    <p>✅ Source reliability scoring</p>
+                </div>
             </div>
+            
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <h3>🧠 ML Features</h3>
-                <p>✅ Advanced misinformation classifier</p>
-                <p>✅ Sentiment analysis with VADER</p>
-                <p>✅ Linguistic pattern detection</p>
-                <p>✅ Source reliability scoring</p>
+                <h3>🔥 Enhanced Features</h3>
+                <ul>
+                    <li>✅ <strong>{len(MASSIVE_RSS_SOURCES)} RSS Sources:</strong> Comprehensive coverage of Indian news</li>
+                    <li>✅ <strong>Advanced ML Classifiers:</strong> Real misinformation detection algorithms</li>
+                    <li>✅ <strong>High-Volume Processing:</strong> 500+ events per cycle</li>
+                    <li>✅ <strong>Comprehensive State Mapping:</strong> All {len(COMPREHENSIVE_INDIAN_STATES)} Indian states</li>
+                    <li>✅ <strong>Real-Time Updates:</strong> 2-minute processing cycles</li>
+                    <li>✅ <strong>Advanced Analytics:</strong> ML scores, sentiment analysis, confidence metrics</li>
+                </ul>
             </div>
-        </div>
-        
-        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-            <h3>🔥 Enhanced Features</h3>
-            <ul>
-                <li>✅ <strong>{len(MASSIVE_RSS_SOURCES)} RSS Sources:</strong> Comprehensive coverage of Indian news</li>
-                <li>✅ <strong>Advanced ML Classifiers:</strong> Real misinformation detection algorithms</li>
-                <li>✅ <strong>High-Volume Processing:</strong> 500+ events per cycle</li>
-                <li>✅ <strong>Comprehensive State Mapping:</strong> All {len(COMPREHENSIVE_INDIAN_STATES)} Indian states</li>
-                <li>✅ <strong>Real-Time Updates:</strong> 2-minute processing cycles</li>
-                <li>✅ <strong>Advanced Analytics:</strong> ML scores, sentiment analysis, confidence metrics</li>
-            </ul>
-        </div>
-    </body>
-    </html>
-    """)
+        </body>
+        </html>
+        """)
 
 @app.get("/api/v1/heatmap/data")
 async def get_heatmap_data():
@@ -982,8 +1004,29 @@ async def get_heatmap_data():
 async def get_live_events(limit: int = 50):
     """Get live events with ML analysis"""
     events = live_events[-limit:] if len(live_events) > limit else live_events
+    
+    # Add verdict field based on misinformation_score for frontend compatibility
+    enhanced_events = []
+    for event in events:
+        enhanced_event = event.copy()
+        score = event.get('misinformation_score', 0)
+        
+        # Convert misinformation_score to verdict
+        if score > 0.7:
+            enhanced_event['verdict'] = 'fake'
+        elif score > 0.4:
+            enhanced_event['verdict'] = 'uncertain'
+        else:
+            enhanced_event['verdict'] = 'real'
+            
+        # Ensure confidence is available
+        if 'confidence' not in enhanced_event:
+            enhanced_event['confidence'] = event.get('ml_score', 0.5)
+            
+        enhanced_events.append(enhanced_event)
+    
     return {
-        "events": events,
+        "events": enhanced_events,
         "total_count": len(live_events),
         "processing_active": processing_active
     }
@@ -1043,12 +1086,152 @@ async def get_analytics_summary():
         "processing_status": "Active" if processing_active else "Stopped"
     }
 
+@app.get("/api/v1/stats")
+async def get_stats():
+    """Get basic statistics for compatibility"""
+    conn = sqlite3.connect('enhanced_realtime.db')
+    cursor = conn.cursor()
+    
+    # Get basic stats
+    cursor.execute("SELECT COUNT(*) FROM events")
+    total_events = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM events WHERE misinformation_score > 0.7")
+    fake_events = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM events WHERE misinformation_score < 0.3")
+    real_events = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM events WHERE misinformation_score >= 0.3 AND misinformation_score <= 0.7")
+    uncertain_events = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT AVG(confidence) FROM events")
+    avg_confidence = cursor.fetchone()[0] or 0
+    
+    conn.close()
+    
+    return {
+        "total_events": total_events,
+        "fake_events": fake_events,
+        "real_events": real_events,
+        "uncertain_events": uncertain_events,
+        "classification_accuracy": round(avg_confidence, 3),
+        "system_status": "LIVE" if processing_active else "READY",
+        "processing_active": processing_active,
+        "last_updated": datetime.now().isoformat(),
+        "total_states": len(COMPREHENSIVE_INDIAN_STATES)
+    }
+
 @app.get("/heatmap")
 async def enhanced_heatmap():
     """Enhanced interactive heatmap"""
-    with open('heatmap_template.html', 'r', encoding='utf-8') as f:
+    with open('../map/enhanced-india-heatmap.html', 'r', encoding='utf-8') as f:
         html_content = f.read()
     return HTMLResponse(html_content)
+
+@app.get("/map/enhanced-india-heatmap.html")
+async def enhanced_heatmap_direct():
+    """Direct access to enhanced heatmap HTML file"""
+    with open('../map/enhanced-india-heatmap.html', 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    return HTMLResponse(html_content)
+
+# Additional route aliases for better navigation
+@app.get("/map")
+async def map_redirect():
+    """Redirect /map to /heatmap"""
+    return RedirectResponse(url="/heatmap")
+
+@app.get("/map/")
+async def map_trailing_slash_redirect():
+    """Redirect /map/ to /heatmap"""
+    return RedirectResponse(url="/heatmap")
+
+@app.get("/dashboard")
+async def dashboard():
+    """Dashboard page"""
+    try:
+        with open('../frontend/dashboard.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        return HTMLResponse(html_content)
+    except FileNotFoundError:
+        return HTMLResponse("""
+        <html>
+        <head><title>Dashboard</title></head>
+        <body style="font-family: Arial; padding: 20px; text-align: center;">
+            <h1>Dashboard</h1>
+            <p>Dashboard is under development. Please use the <a href="/heatmap">Heatmap</a> for now.</p>
+            <a href="/heatmap" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Go to Heatmap</a>
+        </body>
+        </html>
+        """)
+
+# Static file serving for assets
+from fastapi.staticfiles import StaticFiles
+
+# Try to serve static files if directories exist
+import os
+if os.path.exists('../assets'):
+    app.mount("/assets", StaticFiles(directory="../assets"), name="assets")
+if os.path.exists('../frontend/assets'):
+    app.mount("/assets", StaticFiles(directory="../frontend/assets"), name="frontend_assets")
+
+# Also serve frontend assets from /frontend/assets path
+if os.path.exists('../frontend/assets'):
+    app.mount("/frontend/assets", StaticFiles(directory="../frontend/assets"), name="frontend_assets_direct")
+
+# Serve SVG files
+@app.get("/in.svg")
+async def serve_india_svg():
+    """Serve India SVG map"""
+    try:
+        with open('../map/in.svg', 'r', encoding='utf-8') as f:
+            svg_content = f.read()
+        return Response(content=svg_content, media_type="image/svg+xml")
+    except FileNotFoundError:
+        # Return a simple placeholder SVG
+        placeholder_svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+            <rect width="100" height="100" fill="#f0f0f0" stroke="#ccc"/>
+            <text x="50" y="50" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">India Map</text>
+        </svg>
+        """
+        return Response(content=placeholder_svg, media_type="image/svg+xml")
+
+@app.get("/map/in.svg")
+async def serve_india_svg_map_path():
+    """Serve India SVG map from /map/in.svg path"""
+    try:
+        with open('../map/in.svg', 'r', encoding='utf-8') as f:
+            svg_content = f.read()
+        return Response(content=svg_content, media_type="image/svg+xml")
+    except FileNotFoundError:
+        # Return a simple placeholder SVG
+        placeholder_svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+            <rect width="100" height="100" fill="#f0f0f0" stroke="#ccc"/>
+            <text x="50" y="50" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">India Map</text>
+        </svg>
+        """
+        return Response(content=placeholder_svg, media_type="image/svg+xml")
+
+@app.get("/assets/indian-flag.png")
+async def serve_flag():
+    """Serve Indian flag image or placeholder"""
+    # Return a simple data URL for Indian flag colors
+    return Response(
+        content="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAyNCAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjUuMzMiIGZpbGw9IiNGRjk5MzMiLz4KPHJlY3QgeT0iNS4zMyIgd2lkdGg9IjI0IiBoZWlnaHQ9IjUuMzMiIGZpbGw9IndoaXRlIi8+CjxyZWN0IHk9IjEwLjY3IiB3aWR0aD0iMjQiIGhlaWdodD0iNS4zMyIgZmlsbD0iIzEzODgwOCIvPgo8L3N2Zz4K",
+        media_type="image/png"
+    )
+
+# Additional asset routes that might be needed
+@app.get("/map/assets/indian-flag.png")
+async def serve_flag_map_path():
+    """Serve Indian flag image from /map/assets/ path"""
+    return Response(
+        content="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAyNCAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjUuMzMiIGZpbGw9IiNGRjk5MzMiLz4KPHJlY3QgeT0iNS4zMyIgd2lkdGg9IjI0IiBoZWlnaHQ9IjUuMzMiIGZpbGw9IndoaXRlIi8+CjxyZWN0IHk9IjEwLjY3IiB3aWR0aD0iMjQiIGhlaWdodD0iNS4zMyIgZmlsbD0iIzEzODgwOCIvPgo8L3N2Zz4K",
+        media_type="image/png"
+    )
 
 if __name__ == "__main__":
     print("🚀 Starting ENHANCED Real-Time Misinformation Detection System")

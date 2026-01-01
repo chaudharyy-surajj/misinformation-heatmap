@@ -512,7 +512,7 @@
             
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
                 <div style="text-align: center; padding: 1rem;">
-                    <div style="font-size: 2rem; font-weight: 700; color: #6366f1;" id="total-states">36</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: #6366f1;" id="total-states">--</div>
                     <div style="font-size: 0.9rem; color: #718096;">States & UTs Covered</div>
                 </div>
                 <div style="text-align: center; padding: 1rem;">
@@ -541,7 +541,7 @@
                 document.getElementById('uncertain').textContent = data.uncertain_events || 0;
                 
                 // Update total states
-                document.getElementById('total-states').textContent = data.total_states || 36;
+                document.getElementById('total-states').textContent = (data.total_states ?? '--');
                 
                 // Update system status
                 const statusElement = document.getElementById('system-status');

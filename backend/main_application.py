@@ -19,13 +19,32 @@ sys.path.append(str(Path(__file__).parent))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from enhanced_fake_news_detector import fake_news_detector
 from realtime_processor import get_processing_stats, live_events, INDIAN_STATES
 from massive_data_ingestion import high_volume_processing_loop, processing_active
+
+
+FAKE_SCORE_FAKE_THRESHOLD = float(os.getenv("FAKE_SCORE_FAKE_THRESHOLD", "0.39"))
+FAKE_SCORE_UNCERTAIN_THRESHOLD = float(os.getenv("FAKE_SCORE_UNCERTAIN_THRESHOLD", "0.36"))
+
+
+def derive_verdict_from_score(score: float | None, stored_verdict: str | None) -> str:
+    """Derive an API verdict from fake_news_score.
+
+    This intentionally does not require rewriting existing DB rows; it makes the
+    UI show non-zero misinformation based on scores already stored.
+    """
+    if score is None:
+        return stored_verdict or "uncertain"
+    if score >= FAKE_SCORE_FAKE_THRESHOLD:
+        return "fake"
+    if score >= FAKE_SCORE_UNCERTAIN_THRESHOLD:
+        return "uncertain"
+    return "real"
 
 def get_db_connection():
     """Get database connection with proper path"""
@@ -57,7 +76,12 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Start high-volume processing"""
-    asyncio.create_task(high_volume_processing_loop())
+    enable_ingestion = os.getenv("ENABLE_INGESTION", "false").strip().lower() in {"1", "true", "yes", "y"}
+    if enable_ingestion:
+        asyncio.create_task(high_volume_processing_loop())
+        logger.info("High-volume ingestion: ENABLED")
+    else:
+        logger.info("High-volume ingestion: DISABLED (set ENABLE_INGESTION=true to enable)")
 
 # Mount static files
 map_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "map")
@@ -83,6 +107,16 @@ async def dashboard():
     with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dashboard.html"), 'r', encoding='utf-8') as f:
         return HTMLResponse(f.read())
 
+
+@app.get("/dashboard/")
+async def dashboard_trailing_slash():
+    return RedirectResponse(url="/dashboard")
+
+
+@app.get("/dashboard.html")
+async def dashboard_html_alias():
+    return RedirectResponse(url="/dashboard")
+
 # API Routes
 
 @app.get("/api/v1/stats")
@@ -100,23 +134,24 @@ async def get_stats():
             if current_time - get_stats.cache_time < 30:  # 30 second cache
                 return get_stats.cache
         
-        # Optimized single query to get all stats with recent data focus
+        # Optimized single query to get all stats with recent data focus.
+        # NOTE: use score-based thresholds so existing DB data can surface
+        # misinformation even if stored verdicts are overly conservative.
         cursor.execute("""
             SELECT 
                 COUNT(*) as total_events,
-                SUM(CASE WHEN fake_news_verdict = 'fake' THEN 1 ELSE 0 END) as fake_count,
-                SUM(CASE WHEN fake_news_verdict = 'real' THEN 1 ELSE 0 END) as real_count,
-                SUM(CASE WHEN fake_news_verdict = 'uncertain' THEN 1 ELSE 0 END) as uncertain_count
+                SUM(CASE WHEN fake_news_score >= ? THEN 1 ELSE 0 END) as fake_count,
+                SUM(CASE WHEN fake_news_score >= ? AND fake_news_score < ? THEN 1 ELSE 0 END) as uncertain_count,
+                SUM(CASE WHEN fake_news_score < ? OR fake_news_score IS NULL THEN 1 ELSE 0 END) as real_count
             FROM events
             WHERE timestamp > datetime('now', '-24 hours')
-            LIMIT 1
-        """)
+        """, (FAKE_SCORE_FAKE_THRESHOLD, FAKE_SCORE_UNCERTAIN_THRESHOLD, FAKE_SCORE_FAKE_THRESHOLD, FAKE_SCORE_UNCERTAIN_THRESHOLD))
         
         result = cursor.fetchone()
         total_events = result[0] or 0
         fake_events = result[1] or 0
-        real_events = result[2] or 0
-        uncertain_events = result[3] or 0
+        uncertain_events = result[2] or 0
+        real_events = result[3] or 0
         
         conn.close()
         
@@ -138,7 +173,9 @@ async def get_stats():
             "classification_accuracy": classification_accuracy,
             "system_status": "LIVE" if stats['processing_active'] else "READY",
             "last_updated": datetime.now().isoformat(),
-            "total_states": len(INDIAN_STATES)
+            # Prefer showing states-only count (28) to avoid confusion between
+            # states vs UTs in UI text.
+            "total_states": int(os.getenv("TOTAL_STATES_DISPLAY", "28"))
         }
         
         # Cache the result
@@ -160,7 +197,7 @@ async def get_stats():
             "classification_accuracy": 0.5,
             "system_status": "READY",
             "last_updated": datetime.now().isoformat(),
-            "total_states": len(INDIAN_STATES)
+            "total_states": int(os.getenv("TOTAL_STATES_DISPLAY", "28"))
         }
 
 @app.get("/api/v1/heatmap/data")
@@ -182,15 +219,15 @@ async def get_heatmap_data():
         cursor.execute("""
             SELECT state, COUNT(*) as event_count, 
                    AVG(fake_news_confidence) as avg_ai_confidence,
-                   SUM(CASE WHEN fake_news_verdict = 'fake' THEN 1 ELSE 0 END) as fake_count,
-                   SUM(CASE WHEN fake_news_verdict = 'real' THEN 1 ELSE 0 END) as real_count
+                   SUM(CASE WHEN fake_news_score >= ? THEN 1 ELSE 0 END) as fake_count,
+                   SUM(CASE WHEN fake_news_score < ? OR fake_news_score IS NULL THEN 1 ELSE 0 END) as real_count
             FROM events 
             WHERE state IS NOT NULL 
             AND timestamp > datetime('now', '-7 days')
             GROUP BY state
             ORDER BY event_count DESC
             LIMIT 40
-        """)
+        """, (FAKE_SCORE_FAKE_THRESHOLD, FAKE_SCORE_UNCERTAIN_THRESHOLD))
         
         results = cursor.fetchall()
         heatmap_data = []
@@ -246,12 +283,13 @@ async def get_live_events(limit: int = 10):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Optimized query with smaller limit and recent events only
+        # Optimized query with smaller limit and recent events.
+        # Use a wider window so the UI has data even when ingestion is off.
         cursor.execute("""
             SELECT title, content, source, state, fake_news_confidence, 
-                   fake_news_verdict, timestamp
+                   fake_news_verdict, fake_news_score, timestamp
             FROM events 
-            WHERE timestamp > datetime('now', '-1 hour')
+            WHERE timestamp > datetime('now', '-24 hours')
             ORDER BY timestamp DESC 
             LIMIT ?
         """, (limit,))
@@ -260,16 +298,19 @@ async def get_live_events(limit: int = 10):
         events = []
         
         for row in results:
+            stored_verdict = row[5] or "uncertain"
+            score = row[6]
+            derived_verdict = derive_verdict_from_score(score, stored_verdict)
             events.append({
                 "title": (row[0] or "Processing event...")[:100],  # Truncate title
                 "content": (row[1] or "")[:150] + "..." if row[1] and len(row[1]) > 150 else row[1],  # Shorter content
                 "source": row[2] or "Unknown source",
                 "state": row[3] or "Unknown location",
                 "fake_probability": round(row[4] or 0.5, 2),  # Round for smaller payload
-                "classification": row[5] or "uncertain",
-                "verdict": row[5] or "uncertain",
+                "classification": derived_verdict,
+                "verdict": derived_verdict,
                 "confidence": round(row[4] or 0.5, 2),
-                "timestamp": row[6]
+                "timestamp": row[7]
             })
         
         conn.close()
@@ -298,7 +339,7 @@ async def get_state_events(state: str, limit: int = 10):
         
         cursor.execute("""
             SELECT title, content, source, fake_news_confidence, 
-                   fake_news_verdict, timestamp
+                   fake_news_verdict, fake_news_score, timestamp
             FROM events 
             WHERE state = ? 
             ORDER BY timestamp DESC 
@@ -309,15 +350,18 @@ async def get_state_events(state: str, limit: int = 10):
         events = []
         
         for row in results:
+            stored_verdict = row[4] or "uncertain"
+            score = row[5]
+            derived_verdict = derive_verdict_from_score(score, stored_verdict)
             events.append({
                 "title": row[0] or "Processing event...",
                 "content": row[1][:200] + "..." if row[1] and len(row[1]) > 200 else row[1],
                 "source": row[2] or "Unknown source",
                 "fake_probability": row[3] or 0.5,
-                "classification": row[4] or "uncertain",
-                "verdict": row[4] or "uncertain",
+                "classification": derived_verdict,
+                "verdict": derived_verdict,
                 "confidence": row[3] or 0.5,
-                "timestamp": row[5]
+                "timestamp": row[6]
             })
         
         conn.close()
@@ -370,10 +414,10 @@ async def health_check():
     }
 
 if __name__ == "__main__":
-    print("🗺️ Starting Misinformation Heatmap System...")
-    print(f"📊 Coverage: {len(INDIAN_STATES)} Indian states and union territories")
-    print("🚀 Real-time processing: ENABLED")
-    print("🌐 Server: http://localhost:8080")
-    print("📈 Dashboard: http://localhost:8080/dashboard")
-    print("🗺️ Interactive Map: http://localhost:8080/map/enhanced-india-heatmap.html")
+    print("Starting Misinformation Heatmap System...")
+    print(f"Coverage: {len(INDIAN_STATES)} Indian states and union territories")
+    print("Real-time processing: ENABLED")
+    print("Server: http://localhost:8080")
+    print("Dashboard: http://localhost:8080/dashboard")
+    print("Interactive Map: http://localhost:8080/map/enhanced-india-heatmap.html")
     uvicorn.run(app, host="0.0.0.0", port=8080)

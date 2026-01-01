@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Data Summary Button</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: linear-gradient(135deg, #FF9933 0%, #B45309 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(255, 153, 51, 0.4);
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #FF9933;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Data Summary Button Test</h1>
+        <p>This page tests the data summary functionality independently.</p>
+        
+        <button onclick="testDataSummary()" class="test-button">📊 Test Data Summary</button>
+        <button onclick="testApiEndpoint()" class="test-button">🔗 Test API Endpoint</button>
+        
+        <div id="test-results" class="result" style="display: none;">
+            <h3>Test Results:</h3>
+            <div id="results-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // Test the data summary functionality
+        async function testDataSummary() {
+            const resultsDiv = document.getElementById('test-results');
+            const contentDiv = document.getElementById('results-content');
+            
+            resultsDiv.style.display = 'block';
+            contentDiv.innerHTML = '<p>🔄 Testing data summary functionality...</p>';
+            
+            try {
+                // Test API endpoint
+                const response = await fetch('http://localhost:8080/api/v1/analytics/summary');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                contentDiv.innerHTML = `
+                    <h4>✅ API Test Successful!</h4>
+                    <p><strong>Total Events:</strong> ${data.total_events}</p>
+                    <p><strong>High Risk Events:</strong> ${data.high_risk_events}</p>
+                    <p><strong>Average Confidence:</strong> ${(data.avg_confidence * 100).toFixed(1)}%</p>
+                    <p><strong>ML Status:</strong> ${data.ml_status}</p>
+                    <p><strong>Processing Status:</strong> ${data.processing_status}</p>
+                    <p><strong>Active States:</strong> ${data.active_states}</p>
+                    <details>
+                        <summary>Full API Response</summary>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </details>
+                `;
+                
+            } catch (error) {
+                contentDiv.innerHTML = `
+                    <h4>❌ API Test Failed!</h4>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p>Make sure the backend server is running on localhost:8080</p>
+                `;
+            }
+        }
+        
+        // Test just the API endpoint
+        async function testApiEndpoint() {
+            const resultsDiv = document.getElementById('test-results');
+            const contentDiv = document.getElementById('results-content');
+            
+            resultsDiv.style.display = 'block';
+            contentDiv.innerHTML = '<p>🔄 Testing API endpoint...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/analytics/summary');
+                const data = await response.json();
+                
+                contentDiv.innerHTML = `
+                    <h4>✅ Raw API Response:</h4>
+                    <pre style="background: #f1f1f1; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                contentDiv.innerHTML = `
+                    <h4>❌ API Error:</h4>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

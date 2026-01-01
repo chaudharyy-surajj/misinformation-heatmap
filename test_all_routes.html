@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Route Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: linear-gradient(135deg, #FF9933 0%, #B45309 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 3px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .result {
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Complete Website Route Test</h1>
+        <p>Testing all routes to ensure no 404 errors occur.</p>
+        
+        <button onclick="testAllRoutes()" class="test-button" style="font-size: 16px; padding: 12px 24px;">🚀 Test All Routes</button>
+        
+        <div class="grid">
+            <div class="section">
+                <h3>📄 Page Routes</h3>
+                <div id="page-results"></div>
+            </div>
+            
+            <div class="section">
+                <h3>🔌 API Routes</h3>
+                <div id="api-results"></div>
+            </div>
+            
+            <div class="section">
+                <h3>🖼️ Asset Routes</h3>
+                <div id="asset-results"></div>
+            </div>
+            
+            <div class="section">
+                <h3>🗺️ Map Routes</h3>
+                <div id="map-results"></div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>📊 Summary</h3>
+            <div id="summary-results"></div>
+        </div>
+    </div>
+
+    <script>
+        const routes = {
+            pages: [
+                '/',
+                '/dashboard',
+                '/heatmap',
+                '/map',
+                '/map/',
+                '/map/enhanced-india-heatmap.html'
+            ],
+            api: [
+                '/api/v1/stats',
+                '/api/v1/analytics/summary',
+                '/api/v1/heatmap/data',
+                '/api/v1/events/live',
+                '/api/v1/events/live?limit=10'
+            ],
+            assets: [
+                '/assets/indian-flag.png',
+                '/map/assets/indian-flag.png',
+                '/in.svg',
+                '/map/in.svg'
+            ],
+            map: [
+                '/map/enhanced-india-heatmap.html',
+                '/map/in.svg'
+            ]
+        };
+
+        async function testRoute(route, category) {
+            const resultDiv = document.getElementById(`${category}-results`);
+            
+            try {
+                const response = await fetch(`http://localhost:8080${route}`);
+                const resultElement = document.createElement('div');
+                
+                if (response.ok) {
+                    resultElement.className = 'result success';
+                    resultElement.innerHTML = `✅ ${route} - ${response.status} ${response.statusText}`;
+                } else {
+                    resultElement.className = 'result error';
+                    resultElement.innerHTML = `❌ ${route} - ${response.status} ${response.statusText}`;
+                }
+                
+                resultDiv.appendChild(resultElement);
+                return { route, status: response.status, ok: response.ok };
+                
+            } catch (error) {
+                const resultElement = document.createElement('div');
+                resultElement.className = 'result error';
+                resultElement.innerHTML = `❌ ${route} - ERROR: ${error.message}`;
+                resultDiv.appendChild(resultElement);
+                return { route, status: 'ERROR', ok: false, error: error.message };
+            }
+        }
+
+        async function testAllRoutes() {
+            // Clear previous results
+            ['page', 'api', 'asset', 'map', 'summary'].forEach(category => {
+                const div = document.getElementById(`${category}-results`);
+                if (div) div.innerHTML = '<div class="result info">🔄 Testing...</div>';
+            });
+
+            const results = {
+                pages: [],
+                api: [],
+                assets: [],
+                map: []
+            };
+
+            // Test all route categories
+            for (const [category, routeList] of Object.entries(routes)) {
+                const categoryResults = [];
+                for (const route of routeList) {
+                    const result = await testRoute(route, category);
+                    categoryResults.push(result);
+                    // Small delay to avoid overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                results[category] = categoryResults;
+            }
+
+            // Generate summary
+            const summaryDiv = document.getElementById('summary-results');
+            let totalRoutes = 0;
+            let successfulRoutes = 0;
+            let summaryHtml = '<h4>📊 Test Results Summary:</h4>';
+
+            for (const [category, categoryResults] of Object.entries(results)) {
+                const total = categoryResults.length;
+                const successful = categoryResults.filter(r => r.ok).length;
+                const failed = total - successful;
+                
+                totalRoutes += total;
+                successfulRoutes += successful;
+                
+                summaryHtml += `
+                    <div class="result ${failed === 0 ? 'success' : 'error'}">
+                        <strong>${category.toUpperCase()}:</strong> ${successful}/${total} routes working
+                        ${failed > 0 ? ` (${failed} failed)` : ' ✅'}
+                    </div>
+                `;
+            }
+
+            const overallSuccess = successfulRoutes === totalRoutes;
+            summaryHtml += `
+                <div class="result ${overallSuccess ? 'success' : 'error'}" style="margin-top: 15px; font-size: 16px;">
+                    <strong>OVERALL: ${successfulRoutes}/${totalRoutes} routes working</strong>
+                    ${overallSuccess ? ' 🎉 ALL ROUTES WORKING!' : ' ⚠️ Some routes need attention'}
+                </div>
+            `;
+
+            if (overallSuccess) {
+                summaryHtml += `
+                    <div class="result success" style="margin-top: 10px;">
+                        🎊 <strong>SUCCESS!</strong> No more 404 errors. The website is fully functional!
+                        <br><br>
+                        <strong>You can now:</strong><br>
+                        • Navigate to any page without errors<br>
+                        • Use the Data Summary button on the heatmap<br>
+                        • View real-time misinformation data<br>
+                        • Access all API endpoints<br>
+                        • Load all static assets properly
+                    </div>
+                `;
+            }
+
+            summaryDiv.innerHTML = summaryHtml;
+        }
+
+        // Auto-run test after page loads
+        window.addEventListener('load', () => {
+            setTimeout(testAllRoutes, 1000);
+        });
+    </script>
+</body>
+</html>

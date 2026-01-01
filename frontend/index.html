@@ -370,7 +370,7 @@
         <p class="hero-description">
             Advanced AI-powered platform that detects and tracks misinformation 
             across Indian media using IndicBERT, comprehensive fact-checking networks, 
-            and real-time analysis covering all 36 states and union territories.
+            and real-time analysis covering India across all states and union territories.
         </p>
         
         <div class="stats-preview">
@@ -383,7 +383,7 @@
                 <div class="stat-label">AI Accuracy</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number">36</div>
+                <div class="stat-number" id="states-covered">--</div>
                 <div class="stat-label">States & UTs</div>
             </div>
         </div>
@@ -452,6 +452,10 @@
                 const data = await response.json();
                 
                 document.getElementById('live-events').textContent = formatNumber(data.total_events || 0);
+                const statesEl = document.getElementById('states-covered');
+                if (statesEl) {
+                    statesEl.textContent = (data.total_states ?? '--');
+                }
                 
                 const statusText = document.getElementById('system-status');
                 if (data.processing_active) {

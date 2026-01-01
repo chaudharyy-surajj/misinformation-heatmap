@@ -36,7 +36,17 @@ try:
     import numpy as np
 except ImportError as e:
     print(f"Installing required packages...")
-    os.system("pip install feedparser requests numpy")
+    # Use the current interpreter's pip to ensure we install into the active environment (e.g., venv).
+    import subprocess
+    subprocess.check_call([
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "feedparser",
+        "requests",
+        "numpy",
+    ])
     print("Please restart the application")
     sys.exit(1)
 

@@ -32,8 +32,6 @@ try:
     import uvicorn
     import feedparser
     import requests
-    from transformers import AutoTokenizer, AutoModel
-    import torch
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.naive_bayes import MultinomialNB
     from sklearn.ensemble import RandomForestClassifier, VotingClassifier
@@ -47,9 +45,25 @@ try:
     import googlemaps
     from geopy.geocoders import Nominatim
     import pickle
+
+    # Optional heavyweight ML deps (import lazily to keep startup fast).
+    AutoTokenizer = None
+    AutoModel = None
+    torch = None
 except ImportError as e:
     print(f"Installing required packages: {e}")
-    os.system("pip install transformers torch googlemaps geopy")
+    # Use the current interpreter's pip to ensure we install into the active environment (e.g., venv).
+    import subprocess
+    subprocess.check_call([
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "transformers",
+        "torch",
+        "googlemaps",
+        "geopy",
+    ])
     print("Please restart the application")
     sys.exit(1)
 
@@ -65,15 +79,31 @@ class IndicBERTProcessor:
         self.model_name = "ai4bharat/indic-bert"
         self.tokenizer = None
         self.model = None
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self._initialize_model()
+        self.device = None
+        self._init_attempted = False
     
     def _initialize_model(self):
         """Initialize IndicBERT model"""
         try:
+            hf_token = os.getenv("HUGGINGFACE_TOKEN") or os.getenv("HF_TOKEN")
+            # The configured IndicBERT model is gated on HuggingFace. If we don't have a token,
+            # skip initialization to keep the web server responsive.
+            if not hf_token:
+                raise RuntimeError("HuggingFace token not configured; skipping IndicBERT")
+
+            # Import on-demand to avoid slow module import at app startup.
+            global AutoTokenizer, AutoModel, torch
+            if AutoTokenizer is None or AutoModel is None or torch is None:
+                from transformers import AutoTokenizer as _AutoTokenizer, AutoModel as _AutoModel
+                import torch as _torch
+                AutoTokenizer = _AutoTokenizer
+                AutoModel = _AutoModel
+                torch = _torch
+
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             logger.info("🧠 Loading IndicBERT for Indian language understanding...")
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModel.from_pretrained(self.model_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, token=hf_token)
+            self.model = AutoModel.from_pretrained(self.model_name, token=hf_token)
             self.model.to(self.device)
             self.model.eval()
             logger.info("✅ IndicBERT loaded successfully")
@@ -83,9 +113,17 @@ class IndicBERTProcessor:
             # Fallback to basic model
             self.tokenizer = None
             self.model = None
+
+    def _ensure_model(self):
+        """Lazy initializer to avoid heavy imports/model downloads at app startup."""
+        if self._init_attempted:
+            return
+        self._init_attempted = True
+        self._initialize_model()
     
     def get_embeddings(self, text: str) -> np.ndarray:
         """Get IndicBERT embeddings for text"""
+        self._ensure_model()
         if not self.model or not self.tokenizer:
             # Return dummy embeddings if model not available
             return np.random.rand(768)
@@ -97,6 +135,9 @@ class IndicBERTProcessor:
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             
             # Get embeddings
+            if torch is None:
+                return np.random.rand(768)
+
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 embeddings = outputs.last_hidden_state.mean(dim=1).cpu().numpy()

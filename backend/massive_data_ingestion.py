@@ -244,37 +244,41 @@ def fetch_single_rss_source_enhanced(source: Dict) -> List[Dict]:
 
 async def fetch_massive_rss_data():
     """Fetch massive amounts of data from all sources"""
-    events = []
-    
-    logger.info(f"📡 Starting massive data ingestion from {len(MASSIVE_RSS_SOURCES)} RSS sources")
-    
-    # Use larger ThreadPoolExecutor for more concurrent requests
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        # Submit all RSS fetch tasks
-        future_to_source = {
-            executor.submit(fetch_single_rss_source_enhanced, source): source 
-            for source in MASSIVE_RSS_SOURCES
-        }
-        
-        # Collect results as they complete
-        for future in as_completed(future_to_source, timeout=60):
-            source = future_to_source[future]
-            try:
-                source_events = future.result()
-                events.extend(source_events)
-                logger.info(f"✅ {source['name']}: {len(source_events)} articles")
-            except Exception as e:
-                logger.error(f"❌ {source['name']} failed: {e}")
-    
-    # Add synthetic data for demonstration
-    synthetic_events = generate_synthetic_news(200)  # Generate 200 synthetic articles
-    events.extend(synthetic_events)
-    
-    logger.info(f"📊 MASSIVE DATA FETCH COMPLETE: {len(events)} total events")
-    logger.info(f"   📰 RSS Events: {len(events) - len(synthetic_events)}")
-    logger.info(f"   🤖 Synthetic Events: {len(synthetic_events)}")
-    
-    return events
+    def _fetch_massive_rss_data_sync() -> List[Dict]:
+        events: List[Dict] = []
+
+        logger.info(f"📡 Starting massive data ingestion from {len(MASSIVE_RSS_SOURCES)} RSS sources")
+
+        # Use larger ThreadPoolExecutor for more concurrent requests
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            # Submit all RSS fetch tasks
+            future_to_source = {
+                executor.submit(fetch_single_rss_source_enhanced, source): source
+                for source in MASSIVE_RSS_SOURCES
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_source, timeout=60):
+                source = future_to_source[future]
+                try:
+                    source_events = future.result()
+                    events.extend(source_events)
+                    logger.info(f"✅ {source['name']}: {len(source_events)} articles")
+                except Exception as e:
+                    logger.error(f"❌ {source['name']} failed: {e}")
+
+        # Add synthetic data for demonstration
+        synthetic_events = generate_synthetic_news(200)  # Generate 200 synthetic articles
+        events.extend(synthetic_events)
+
+        logger.info(f"📊 MASSIVE DATA FETCH COMPLETE: {len(events)} total events")
+        logger.info(f"   📰 RSS Events: {len(events) - len(synthetic_events)}")
+        logger.info(f"   🤖 Synthetic Events: {len(synthetic_events)}")
+
+        return events
+
+    # Run the heavy fetch in a background thread so we don't block FastAPI's event loop.
+    return await asyncio.to_thread(_fetch_massive_rss_data_sync)
 
 async def high_volume_processing_loop():
     """High-volume processing loop with massive data ingestion"""
