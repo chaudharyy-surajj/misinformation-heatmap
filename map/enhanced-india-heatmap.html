@@ -2552,7 +2552,7 @@
                     
                     summaryData.heatmap.top_states = heatmapData
                         .filter(d => d.total_events > 0)
-                        .sort((a, b) => b.event_count - a.event_count)
+                        .sort((a, b) => b.total_events - a.total_events)
                         .slice(0, 5);
                 }
                 
