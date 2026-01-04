@@ -1572,9 +1572,9 @@
                     Misinformation Heatmap
                 </a>
                 <div class="nav-links">
-                    <a href="/" class="nav-link">Home</a>
+                    <a href="/home" class="nav-link">Home</a>
                     <a href="/dashboard" class="nav-link">Dashboard</a>
-                    <a href="/map/enhanced-india-heatmap.html" class="nav-link active">Heatmap</a>
+                    <a href="/heatmap" class="nav-link active">Heatmap</a>
                 </div>
                 <div class="navbar-actions">
                     <button onclick="testMapColors()" class="navbar-btn primary">🎨 Test Colors</button>
@@ -2279,7 +2279,7 @@
                 const data = await response.json();
                 
                 document.getElementById('total-events').textContent = data.total_events || 0;
-                document.getElementById('active-states').textContent = data.total_states || 36;
+                document.getElementById('active-states').textContent = data.total_states || 29;
                 document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
                 
                 const statusDot = document.querySelector('.status-dot');
@@ -2520,6 +2520,9 @@
                 
                 // Fetch analytics data from backend
                 const response = await fetch('/api/v1/analytics/summary');
+                if (!response.ok) {
+                    throw new Error('API request failed');
+                }
                 const analyticsData = await response.json();
                 
                 // Combine with heatmap data
@@ -2624,29 +2627,63 @@
                                         <div class="summary-card">
                                             <div class="card-icon">📰</div>
                                             <div class="card-content">
-                                                <div class="card-value">${analytics.total_events.toLocaleString()}</div>
+                                                <div class="card-value">${(analytics.total_events || 0).toLocaleString()}</div>
                                                 <div class="card-label">Total Events</div>
                                             </div>
                                         </div>
                                         <div class="summary-card high-risk">
                                             <div class="card-icon">🚨</div>
                                             <div class="card-content">
-                                                <div class="card-value">${analytics.high_risk_events.toLocaleString()}</div>
-                                                <div class="card-label">High Risk Events</div>
+                                                <div class="card-value">${(analytics.fake_events || 0).toLocaleString()}</div>
+                                                <div class="card-label">Fake News</div>
                                             </div>
                                         </div>
                                         <div class="summary-card">
+                                            <div class="card-icon">✅</div>
+                                            <div class="card-content">
+                                                <div class="card-value">${(analytics.real_events || 0).toLocaleString()}</div>
+                                                <div class="card-label">Real News</div>
+                                            </div>
+                                        </div>
+                                        <div class="summary-card">
+                                            <div class="card-icon">⚠️</div>
+                                            <div class="card-content">
+                                                <div class="card-value">${(analytics.uncertain_events || 0).toLocaleString()}</div>
+                                                <div class="card-label">Uncertain</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="summary-section">
+                                    <h3>📈 Risk Analysis</h3>
+                                    <div class="summary-grid">
+                                        <div class="summary-card high-risk">
                                             <div class="card-icon">🎯</div>
                                             <div class="card-content">
-                                                <div class="card-value">${(analytics.avg_confidence * 100).toFixed(1)}%</div>
-                                                <div class="card-label">Avg Confidence</div>
+                                                <div class="card-value">${(analytics.fake_percentage || 0).toFixed(1)}%</div>
+                                                <div class="card-label">Fake News Rate</div>
                                             </div>
                                         </div>
                                         <div class="summary-card">
-                                            <div class="card-icon">⏱️</div>
+                                            <div class="card-icon">🏛️</div>
                                             <div class="card-content">
-                                                <div class="card-value">${analytics.recent_activity_1h.toLocaleString()}</div>
-                                                <div class="card-label">Last Hour</div>
+                                                <div class="card-value">${analytics.active_states || 29}</div>
+                                                <div class="card-label">Active States</div>
+                                            </div>
+                                        </div>
+                                        <div class="summary-card">
+                                            <div class="card-icon">⚡</div>
+                                            <div class="card-content">
+                                                <div class="card-value">${(analytics.throughput_eps || 0).toFixed(1)}</div>
+                                                <div class="card-label">Events/Second</div>
+                                            </div>
+                                        </div>
+                                        <div class="summary-card">
+                                            <div class="card-icon">🔄</div>
+                                            <div class="card-content">
+                                                <div class="card-value">${analytics.processing_active ? 'Active' : 'Idle'}</div>
+                                                <div class="card-label">System Status</div>
                                             </div>
                                         </div>
                                     </div>
@@ -2659,7 +2696,7 @@
                                             <div class="card-icon">🏛️</div>
                                             <div class="card-content">
                                                 <div class="card-value">${heatmap.states_with_data}/${heatmap.total_states}</div>
-                                                <div class="card-label">Active States</div>
+                                                <div class="card-label">States with Data</div>
                                             </div>
                                         </div>
                                         ${heatmap.fake_probability ? `

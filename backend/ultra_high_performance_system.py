@@ -463,6 +463,17 @@ async def fetch_rss_ultra_fast(session: aiohttp.ClientSession, source: Dict) -> 
     
     return events
 
+def deduplicate_events(events_list):
+    """Remove duplicate events based on title"""
+    seen_titles = set()
+    unique_events = []
+    for event in events_list:
+        title = event.get('title', '').strip().lower()
+        if title and title not in seen_titles:
+            seen_titles.add(title)
+            unique_events.append(event)
+    return unique_events
+
 async def initialize_all_states_with_data():
     """Initialize all Indian states with comprehensive fake news data"""
     global live_events
@@ -638,7 +649,13 @@ async def generate_continuous_fake_news():
     """Continuously generate new fake news events to keep the system active"""
     global live_events
     
-    states = ["Maharashtra", "Delhi", "Karnataka", "Tamil Nadu", "Gujarat", "West Bengal", "Uttar Pradesh", "Rajasthan"]
+    all_states = [
+        "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Delhi", "Goa",
+        "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala",
+        "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland",
+        "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+        "Uttar Pradesh", "Uttarakhand", "West Bengal"
+    ]
     
     # Breaking news templates for continuous generation
     breaking_templates = [
@@ -649,38 +666,47 @@ async def generate_continuous_fake_news():
         "LEAKED: {state} health department using expired medicines in government hospitals",
         "SHOCKING: {state} transport authority taking bribes for illegal vehicle permits",
         "EXCLUSIVE: {state} forest department illegally selling protected land",
-        "REVEALED: {state} electricity board inflating bills to fund political campaigns"
+        "REVEALED: {state} electricity board inflating bills to fund political campaigns",
+        "BREAKING: {state} CM's family owns shell companies receiving government contracts",
+        "URGENT: {state} hospitals refusing treatment to poor patients despite government scheme",
+        "EXPOSED: {state} police station running extortion racket targeting businesses",
+        "ALERT: {state} schools forcing parents to buy expensive books from specific shops",
+        "LEAKED: {state} municipal corporation officials taking bribes for building permits",
+        "SHOCKING: {state} water board contaminating supply with industrial waste",
+        "EXCLUSIVE: {state} land records being manipulated to benefit politicians"
     ]
     
     new_events = []
     
-    # Generate 3-5 new fake news events
-    for i in range(random.randint(3, 5)):
-        state = random.choice(states)
+    # Generate 8-12 new fake news events across different states
+    num_events = random.randint(8, 12)
+    selected_states = random.sample(all_states, min(num_events, len(all_states)))
+    
+    for state in selected_states:
         template = random.choice(breaking_templates)
         title = template.format(state=state)
         
-        content = f"{title}. Breaking developments suggest this could be the tip of the iceberg. Sources close to the investigation reveal shocking details that could shake the entire {state} government."
+        content = f"{title}. Breaking developments suggest this could be the tip of the iceberg. Sources close to the investigation reveal shocking details that could shake the entire {state} government. Multiple witnesses have come forward with evidence."
         
         event = {
             'event_id': f"breaking_{state}_{int(time.time())}_{random.randint(10000,99999)}",
-            'source': random.choice([f"{state} Breaking News", f"Exclusive {state}", f"{state} Insider", f"Truth {state}"]),
+            'source': random.choice([f"{state} Breaking News", f"Exclusive {state}", f"{state} Insider", f"Truth {state}", f"{state} Expose"]),
             'title': title,
             'content': content,
             'summary': title[:180] + '...' if len(title) > 180 else title,
             'url': f"https://example.com/breaking/{state.lower().replace(' ', '-')}/{random.randint(100000,999999)}",
             'state': state,
-            'category': random.choice(['Politics', 'Crime', 'Corruption']),
-            'misinformation_score': random.uniform(0.8, 0.98),  # Very high fake probability
-            'confidence': random.uniform(0.85, 0.95),
-            'source_reliability': random.uniform(0.1, 0.3),  # Very low reliability
+            'category': random.choice(['Politics', 'Crime', 'Corruption', 'Health']),
+            'misinformation_score': random.uniform(0.75, 0.98),  # High fake probability
+            'confidence': random.uniform(0.8, 0.95),
+            'source_reliability': random.uniform(0.1, 0.35),  # Low reliability
             'tier': 3,
             'timestamp': datetime.now().isoformat(),
             'ml_details': {
-                'misinformation_score': random.uniform(0.8, 0.98),
-                'confidence': random.uniform(0.85, 0.95),
-                'source_reliability_factor': random.uniform(0.1, 0.3),
-                'individual_scores': {'breaking_generator': random.uniform(0.85, 0.98)},
+                'misinformation_score': random.uniform(0.75, 0.98),
+                'confidence': random.uniform(0.8, 0.95),
+                'source_reliability_factor': random.uniform(0.1, 0.35),
+                'individual_scores': {'breaking_generator': random.uniform(0.8, 0.98)},
                 'feature_importance': {'breaking_news': True, 'sensational': True}
             }
         }
@@ -693,7 +719,7 @@ async def generate_continuous_fake_news():
     if len(live_events) > 2000:
         live_events = live_events[-2000:]
     
-    logger.info(f"🚨 Generated {len(new_events)} new breaking fake news events")
+    logger.info(f"🚨 Generated {len(new_events)} new breaking fake news events across {len(selected_states)} states")
     return len(new_events)
 
 async def generate_synthetic_events_for_low_activity_states():
@@ -850,8 +876,13 @@ async def ultra_high_volume_processing_loop():
                 
                 # Update global state
                 live_events.extend(processed_events)
-                if len(live_events) > 1000:  # Keep last 1000 events
-                    live_events = live_events[-1000:]
+                
+                # Deduplicate and keep last 1000 events
+                live_events_deduped = deduplicate_events(live_events)
+                if len(live_events_deduped) > 1000:
+                    live_events_deduped = live_events_deduped[-1000:]
+                live_events.clear()
+                live_events.extend(live_events_deduped)
                 
                 # Update metrics
                 processing_time = time.time() - start_time
@@ -863,8 +894,8 @@ async def ultra_high_volume_processing_loop():
                 logger.info(f"📊 Cycle completed: {len(processed_events)} events in {processing_time:.2f}s ({processing_metrics.throughput_eps:.1f} EPS)")
                 logger.info(f"💾 Memory: {processing_metrics.memory_usage_mb:.1f}MB | CPU: {processing_metrics.cpu_usage_percent:.1f}%")
             
-            # Every 5 cycles, generate more fake news for active demonstration
-            if processing_metrics.total_events % 200 == 0:  # Every ~200 events processed
+            # Every 2 cycles, generate more fake news for active demonstration
+            if processing_metrics.total_events % 100 == 0:  # Every ~100 events processed
                 fake_count = await generate_continuous_fake_news()
                 if fake_count > 0:
                     logger.info(f"🚨 Generated {fake_count} new fake news events for demonstration")
@@ -1206,8 +1237,8 @@ async def get_performance_metrics():
 async def get_stats_ultra():
     """Get ultra-fast statistics"""
     total_events = len(live_events)
-    fake_events = sum(1 for event in live_events if event.get('misinformation_score', 0) > 0.7)
-    uncertain_events = sum(1 for event in live_events if 0.4 < event.get('misinformation_score', 0) <= 0.7)
+    fake_events = sum(1 for event in live_events if event.get('misinformation_score', 0) > 0.6)
+    uncertain_events = sum(1 for event in live_events if 0.35 < event.get('misinformation_score', 0) <= 0.6)
     real_events = total_events - fake_events - uncertain_events
     
     return {
@@ -1224,6 +1255,69 @@ async def get_stats_ultra():
         "total_sources": len(ULTRA_RSS_SOURCES)
     }
 
+@app.get("/api/v1/analytics/summary")
+async def get_analytics_summary():
+    """Get comprehensive analytics summary"""
+    try:
+        total_events = len(live_events)
+        fake_events = sum(1 for event in live_events if event.get('misinformation_score', 0) > 0.6)
+        real_events = sum(1 for event in live_events if event.get('misinformation_score', 0) <= 0.35)
+        uncertain_events = total_events - fake_events - real_events
+        
+        # Count events by state
+        state_counts = {}
+        for event in live_events:
+            state = event.get('state', 'Unknown')
+            if state not in state_counts:
+                state_counts[state] = {'total': 0, 'fake': 0, 'real': 0}
+            state_counts[state]['total'] += 1
+            if event.get('misinformation_score', 0) > 0.6:
+                state_counts[state]['fake'] += 1
+            elif event.get('misinformation_score', 0) <= 0.35:
+                state_counts[state]['real'] += 1
+        
+        # Count events by category
+        category_counts = {}
+        for event in live_events:
+            category = event.get('category', 'General')
+            if category not in category_counts:
+                category_counts[category] = 0
+            category_counts[category] += 1
+        
+        # Get top sources
+        source_counts = {}
+        for event in live_events:
+            source = event.get('source', 'Unknown')
+            if source not in source_counts:
+                source_counts[source] = 0
+            source_counts[source] += 1
+        
+        top_sources = sorted(source_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        return {
+            "total_events": total_events,
+            "fake_events": fake_events,
+            "real_events": real_events,
+            "uncertain_events": uncertain_events,
+            "fake_percentage": (fake_events / total_events * 100) if total_events > 0 else 0,
+            "real_percentage": (real_events / total_events * 100) if total_events > 0 else 0,
+            "active_states": len(state_counts),
+            "state_breakdown": state_counts,
+            "category_breakdown": category_counts,
+            "top_sources": [{"source": s[0], "count": s[1]} for s in top_sources],
+            "processing_active": processing_active,
+            "throughput_eps": processing_metrics.throughput_eps,
+            "last_updated": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Analytics summary failed: {e}")
+        return {
+            "total_events": 0,
+            "fake_events": 0,
+            "real_events": 0,
+            "error": str(e)
+        }
+
 @app.get("/api/v1/events/state/{state_name}")
 async def get_state_events(state_name: str, limit: int = 50):
     """Get events for a specific state"""
@@ -1231,21 +1325,31 @@ async def get_state_events(state_name: str, limit: int = 50):
         # Filter events for the specific state
         state_events = [event for event in live_events if event.get('state') == state_name]
         
+        # Remove duplicates based on title
+        seen_titles = set()
+        unique_events = []
+        for event in state_events:
+            title = event.get('title', '').strip().lower()
+            if title and title not in seen_titles:
+                seen_titles.add(title)
+                unique_events.append(event)
+        
         # Sort by timestamp (most recent first)
-        state_events.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        unique_events.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         
         # Limit results
-        state_events = state_events[:limit]
+        unique_events = unique_events[:limit]
         
         # Add verdict field for frontend compatibility
         enhanced_events = []
-        for event in state_events:
+        for event in unique_events:
             enhanced_event = event.copy()
             score = event.get('misinformation_score', 0)
             
-            if score > 0.7:
+            # Use same thresholds as heatmap for consistency
+            if score > 0.6:  # Lowered threshold to catch more fake news
                 enhanced_event['verdict'] = 'fake'
-            elif score > 0.4:
+            elif score > 0.35:
                 enhanced_event['verdict'] = 'uncertain'
             else:
                 enhanced_event['verdict'] = 'real'
@@ -1283,6 +1387,8 @@ async def get_state_events(state_name: str, limit: int = 50):
             "events": {"all": [], "fake": [], "real": [], "uncertain": []},
             "error": str(e)
         }
+
+@app.get("/api/v1/heatmap/data")
 async def get_heatmap_data_ultra():
     """Get comprehensive heatmap data with state-specific information"""
     try:
@@ -1326,8 +1432,8 @@ async def get_heatmap_data_ultra():
             
             total_events = len(state_events)
             if total_events > 0:
-                fake_events = sum(1 for event in state_events if event.get('misinformation_score', 0) > 0.7)
-                uncertain_events = sum(1 for event in state_events if 0.4 < event.get('misinformation_score', 0) <= 0.7)
+                fake_events = sum(1 for event in state_events if event.get('misinformation_score', 0) > 0.6)
+                uncertain_events = sum(1 for event in state_events if 0.35 < event.get('misinformation_score', 0) <= 0.6)
                 real_events = total_events - fake_events - uncertain_events
                 
                 avg_misinformation_score = sum(event.get('misinformation_score', 0) for event in state_events) / total_events
@@ -1433,6 +1539,16 @@ async def enhanced_heatmap_direct():
     with open('../map/enhanced-india-heatmap.html', 'r', encoding='utf-8') as f:
         html_content = f.read()
     return HTMLResponse(html_content)
+
+@app.get("/home")
+async def home_page():
+    """Serve the home page"""
+    try:
+        with open('../frontend/index.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        return HTMLResponse(html_content)
+    except FileNotFoundError:
+        return RedirectResponse(url="/heatmap")
 
 @app.get("/dashboard")
 async def dashboard():
